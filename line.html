@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Line Chart</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap");
+      .line {
+        fill: none;
+        stroke: steelblue;
+        stroke-width: 2px;
+      }
+      body {
+        font-family: 'Roboto', sans-serif;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.min.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+  </head>
+  <body>
+    <h1>Line Charts</h1>
+    <button onclick="excelFileToJSON()">Display</button>
+    <div id="chart1"></div>
+    <script>
+      function excelFileToJSON() {
+        try {
+          var filePath = "financial.xlsx";
+          var xhr = new XMLHttpRequest();
+          xhr.open("GET", filePath, true);
+          xhr.responseType = "arraybuffer";
+          xhr.onload = function (e) {
+            if (xhr.status === 200) {
+              var data = new Uint8Array(xhr.response);
+              var workbook = XLSX.read(data, { type: "array" });
+              var result = {};
+              workbook.SheetNames.forEach(function (sheetName) {
+                var roa = XLSX.utils.sheet_to_row_object_array(
+                  workbook.Sheets[sheetName]
+                );
+                if (roa.length > 0) {
+                  result[sheetName] = roa;
+                }
+              });
+              var _data = result["Sheet1"];
+              console.log(_data);
+              graph(_data);
+            } else {
+              console.error("Failed to load the file");
+            }
+          };
+          xhr.send();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      function graph(_data) {
+        const margin = { top: 70, right: 30, bottom: 40, left: 80 };
+        const width = 1200 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // Create SVG container
+        const svg = d3
+          .select("#chart1")
+          .selectAll("svg")
+          .data(_data)
+          .enter()
+          .append("svg")
+          .attr("width", width + margin.left + margin.right)
+          .attr("height", height + margin.top + margin.bottom)
+          .append("g")
+          .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        svg.each(function (chartData) {
+          // Filter data for the current category
+          const transformedData = Object.entries(chartData)
+            .filter(([key, value]) => key !== "FB")
+            .map(([year, value]) => {
+              if (value.includes("%")) {
+                value = value.replace("%", "");
+              }
+              return { year, value: +value };
+            });
+
+          console.log(JSON.stringify(transformedData));
+          // Define scales for the current chart
+          const xScale = d3
+            .scaleBand()
+            .range([0, width])
+            .padding(0.1)
+            .domain(transformedData.map((d) => d.year));
+
+          const yScale = d3
+            .scaleLinear()
+            .range([height, 0])
+            .domain([
+              d3.min(transformedData, (d) => d.value), // Minimum value
+              d3.max(transformedData, (d) => d.value), // Maximum value
+            ]);
+          const line = d3
+            .line()
+            .x((d) => xScale(d.year) + xScale.bandwidth() / 2)
+            .y((d) => yScale(d.value));
+
+          // Draw the line for the current chart
+          const currentSvg = d3.select(this);
+
+          currentSvg
+            .append("path")
+            .datum(transformedData)
+            .attr("class", "line")
+            .attr("d", line);
+
+          // Draw x-axis for the current chart
+          currentSvg
+            .append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0, ${height})`)
+            .call(d3.axisBottom(xScale));
+
+          // Draw y-axis for the current chart
+          currentSvg
+            .append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(yScale));
+
+          // Add labels for the current chart
+          currentSvg
+            .append("text")
+            .attr("class", "x-label")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 5)
+            .text("Year");
+
+          currentSvg
+            .append("text")
+            .attr("class", "y-label")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -margin.left + 15)
+            .text(chartData.FB);
+        });
+      }
+    </script>
+  </body>
+</html>
